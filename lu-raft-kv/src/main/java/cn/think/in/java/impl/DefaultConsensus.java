@@ -137,6 +137,18 @@ public class DefaultConsensus implements Consensus {
             if (param.getEntries() == null || param.getEntries().length == 0) {
                 LOGGER.info("node {} append heartbeat success , he's term : {}, my term : {}",
                     param.getLeaderId(), param.getTerm(), node.getCurrentTerm());
+
+                //如果 leaderCommit > commitIndex，令 commitIndex 等于 leaderCommit 和 新日志条目索引值中较小的一个
+                if (param.getLeaderCommit() > node.getLastApplied()) {
+                    int commitIndex = (int) Math.min(param.getLeaderCommit(), node.getLogModule().getLastIndex());
+
+                    while(commitIndex > node.lastApplied){
+                        LogEntry entry = node.getLogModule().read(node.commitIndex + 1);
+                        node.getStateMachine().apply(entry);
+                        node.setLastApplied(commitIndex);
+                    }
+                }
+
                 return AentryResult.newBuilder().term(node.getCurrentTerm()).success(true).build();
             }
 
@@ -171,16 +183,12 @@ public class DefaultConsensus implements Consensus {
             // 写进日志并且应用到状态机
             for (LogEntry entry : param.getEntries()) {
                 node.getLogModule().write(entry);
-                node.stateMachine.apply(entry);
+                node.setCommitIndex(node.commitIndex + 1);
+                //node.stateMachine.apply(entry); 不应该直接应用到状态机, 此时并不能确定此操作是否被leader commit
                 result.setSuccess(true);
             }
 
-            //如果 leaderCommit > commitIndex，令 commitIndex 等于 leaderCommit 和 新日志条目索引值中较小的一个
-            if (param.getLeaderCommit() > node.getCommitIndex()) {
-                int commitIndex = (int) Math.min(param.getLeaderCommit(), node.getLogModule().getLastIndex());
-                node.setCommitIndex(commitIndex);
-                node.setLastApplied(commitIndex);
-            }
+
 
             result.setTerm(node.getCurrentTerm());
 

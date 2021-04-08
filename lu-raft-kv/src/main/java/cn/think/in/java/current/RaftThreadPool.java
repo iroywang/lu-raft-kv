@@ -1,13 +1,9 @@
 package cn.think.in.java.current;
 
-import java.util.concurrent.Callable;
-import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import cn.think.in.java.entity.RvoteResult;
+import cn.think.in.java.rpc.Response;
+
+import java.util.concurrent.*;
 
 /**
  *
@@ -23,6 +19,15 @@ public class RaftThreadPool {
 
     private static ScheduledExecutorService ss = getScheduled();
     private static ThreadPoolExecutor te = getThreadPool();
+    private static CompletionService<Response<RvoteResult>> executorCompletionService= getExecutorCompletionService();
+
+    public static ExecutorCompletionService getExecutorCompletionService(){
+        return new ExecutorCompletionService<>(te);
+    }
+
+    public static CompletionService retExecutorCompletionService(){
+        return executorCompletionService;
+    }
 
     private static ThreadPoolExecutor getThreadPool() {
         return new RaftThreadPoolExecutor(
@@ -51,6 +56,10 @@ public class RaftThreadPool {
     @SuppressWarnings("unchecked")
     public static <T> Future<T> submit(Callable r) {
         return te.submit(r);
+    }
+
+    public static <T> Future<T> submitCompletion(Callable r) {
+        return executorCompletionService.submit(r);
     }
 
     public static void execute(Runnable r) {

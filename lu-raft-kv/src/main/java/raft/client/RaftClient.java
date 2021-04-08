@@ -60,7 +60,7 @@ public class RaftClient {
                 obj = ClientKVReq.newBuilder().key("hello:" + i).type(ClientKVReq.GET).build();
 
                 addr = list.get(index);
-                addr = list.get(index);
+                //addr = list.get(index);
                 r.setUrl(addr);
                 r.setObj(obj);
 

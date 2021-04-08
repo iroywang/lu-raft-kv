@@ -14,8 +14,8 @@ import cn.think.in.java.entity.LogEntry;
 public class DefaultStateMachineTest {
 
     static {
-        System.setProperty("serverPort", "8777");
-        DefaultStateMachine.dbDir = "/Users/cxs/code/lu-raft-revert/rocksDB-raft/" + System.getProperty("serverPort");
+        System.setProperty("serverPort", "8776");
+        DefaultStateMachine.dbDir = "/Users/iroy/Downloads/lu-raft-kv/rocksDB-raft/" + System.getProperty("serverPort");
         DefaultStateMachine.stateMachineDir = DefaultStateMachine.dbDir + "/stateMachine";
     }
     DefaultStateMachine machine;

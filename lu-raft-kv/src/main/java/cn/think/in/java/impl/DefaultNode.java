@@ -5,16 +5,7 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeoutException;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
@@ -166,7 +157,7 @@ public class DefaultNode<T> implements Node<T>, LifeCycle, ClusterMembershipChan
             if (started) {
                 return;
             }
-            RPC_SERVER.start();
+            RPC_SERVER.start();//启动rpc服务
 
             consensus = new DefaultConsensus(this);
             delegate = new ClusterMembershipChangesImpl(this);
@@ -253,6 +244,7 @@ public class DefaultNode<T> implements Node<T>, LifeCycle, ClusterMembershipChan
         }
 
         if (request.getType() == ClientKVReq.GET) {
+            //get返回数据不安全, 需增加向大多数节点添加一个空白的AE指令, 以保证数据安全
             LogEntry logEntry = stateMachine.get(request.getKey());
             if (logEntry != null) {
                 return new ClientKVAck(logEntry.getCommand());
@@ -391,7 +383,7 @@ public class DefaultNode<T> implements Node<T>, LifeCycle, ClusterMembershipChan
                     } else {
                         logEntries.add(entry);
                     }
-                    // 最小的那个日志.
+                    // 最小的那个日志. 返回上一个日志
                     LogEntry preLog = getPreLog(logEntries.getFirst());
                     aentryParam.setPreLogTerm(preLog.getTerm());
                     aentryParam.setPrevLogIndex(preLog.getIndex());
@@ -545,7 +537,7 @@ public class DefaultNode<T> implements Node<T>, LifeCycle, ClusterMembershipChan
 
         @Override
         public void run() {
-
+            //LOGGER.warn("electionTaskelectionTask");
             if (status == LEADER) {
                 return;
             }
@@ -553,9 +545,12 @@ public class DefaultNode<T> implements Node<T>, LifeCycle, ClusterMembershipChan
             long current = System.currentTimeMillis();
             // 基于 RAFT 的随机时间,解决冲突.
             electionTime = electionTime + ThreadLocalRandom.current().nextInt(50);
+
             if (current - preElectionTime < electionTime) {
                 return;
             }
+
+            //LOGGER.warn("electionTime[{}], preElectionTime[{}]", electionTime, preElectionTime);
             status = NodeStatus.CANDIDATE;
             LOGGER.error("node {} will become CANDIDATE and start election leader, current term : [{}], LastEntry : [{}]",
                 peerSet.getSelf(), currentTerm, logModule.getLast());
@@ -575,7 +570,7 @@ public class DefaultNode<T> implements Node<T>, LifeCycle, ClusterMembershipChan
             // 发送请求
             for (Peer peer : peers) {
 
-                futureArrayList.add(RaftThreadPool.submit(new Callable() {
+                futureArrayList.add(RaftThreadPool.submitCompletion(new Callable() {
                     @Override
                     public Object call() throws Exception {
                         long lastTerm = 0L;
@@ -622,7 +617,7 @@ public class DefaultNode<T> implements Node<T>, LifeCycle, ClusterMembershipChan
                         try {
 
                             @SuppressWarnings("unchecked")
-                            Response<RvoteResult> response = (Response<RvoteResult>) future.get(3000, MILLISECONDS);
+                            Response<RvoteResult> response = (Response<RvoteResult>) RaftThreadPool.retExecutorCompletionService().take().get(3000, MILLISECONDS);
                             if (response == null) {
                                 return -1;
                             }
@@ -687,6 +682,9 @@ public class DefaultNode<T> implements Node<T>, LifeCycle, ClusterMembershipChan
             nextIndexs.put(peer, logModule.getLastIndex() + 1);
             matchIndexs.put(peer, 0L);
         }
+        //成为leader后提交一个空的日志条目,以保证上一个leader的未提交条目要么被提交要么被覆盖
+        ClientKVReq obj = ClientKVReq.newBuilder().key("empty" ).value("empty").type(ClientKVReq.PUT).build();
+        handlerClientRequest(obj);
     }
 
 
@@ -716,6 +714,7 @@ public class DefaultNode<T> implements Node<T>, LifeCycle, ClusterMembershipChan
                 AentryParam param = AentryParam.newBuilder()
                     .entries(null)// 心跳,空日志.
                     .leaderId(peerSet.getSelf().getAddr())
+                    .leaderCommit(commitIndex)
                     .serverId(peer.getAddr())
                     .term(currentTerm)
                     .build();

@@ -10,6 +10,8 @@ import cn.think.in.java.membership.changes.ClusterMembershipChanges;
 import cn.think.in.java.membership.changes.Result;
 import cn.think.in.java.rpc.Request;
 import cn.think.in.java.rpc.Response;
+import raft.client.ClientKVAck;
+import raft.client.ClientKVReq;
 
 /**
  *
@@ -67,9 +69,18 @@ public class ClusterMembershipChangesImpl implements ClusterMembershipChanges {
                 }
             }
 
+        }else{
+            redirect(newPeer);
         }
 
         return new Result();
+    }
+
+    public ClientKVAck redirect(Peer request) {
+        Request r = Request.newBuilder().
+                obj(request).url(node.peerSet.getLeader().getAddr()).cmd(Request.CLIENT_REQ).build();
+        Response response = node.rpcClient.send(r);
+        return (ClientKVAck) response.getResult();
     }
 
 
