@@ -183,10 +183,10 @@ public class DefaultConsensus implements Consensus {
             // 写进日志并且应用到状态机
             for (LogEntry entry : param.getEntries()) {
                 node.getLogModule().write(entry);
-                node.setCommitIndex(node.commitIndex + 1);
                 //node.stateMachine.apply(entry); 不应该直接应用到状态机, 此时并不能确定此操作是否被leader commit
                 result.setSuccess(true);
             }
+            node.setCommitIndex(param.getLeaderCommit());
 
 
 
